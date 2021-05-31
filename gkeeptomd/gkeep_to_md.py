@@ -86,7 +86,6 @@ def _get_login() -> tuple[str, str]:
 
 def _load_cache() -> Optional[dict[str, Any]]:
 
-    # TODO: Implement verbose mode
     if VERBOSE:
         print('Checking if state is saved')
 
@@ -129,7 +128,6 @@ def _save_cache(state: Any) -> None:
 
 
 def _list_note_to_markdown(note: gkeepapi._node.List) -> str:
-    '''Turns a google keep list to a markdown list'''
 
     if not note.title:  # type: ignore
         heading = f'{"#" * DEFAULT_HEADING_LEVEL} <empty title>'
