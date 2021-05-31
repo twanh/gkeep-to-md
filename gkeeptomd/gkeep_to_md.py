@@ -21,7 +21,9 @@ CACHE_FILE_NAME = 'gkeepnotes.json'
 
 LINK_RE = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'  # noqa: E501
 
+# XXX: Ugly globals
 DEFAULT_HEADING_LEVEL = 3
+VERBOSE = False
 
 
 def _create_argument_parser() -> argparse.ArgumentParser:
@@ -63,6 +65,12 @@ def _create_argument_parser() -> argparse.ArgumentParser:
         help='the heading level to use for the markdown headings (default: 3)',
     )
 
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='turn on verbose mode',
+    )
+
     return parser
 
 
@@ -79,7 +87,8 @@ def _get_login() -> tuple[str, str]:
 def _load_cache() -> Optional[dict[str, Any]]:
 
     # TODO: Implement verbose mode
-    print('Checking if state is saved')
+    if VERBOSE:
+        print('Checking if state is saved')
 
     cache_file_path = os.path.join(
         user_cache_dir(
@@ -87,12 +96,14 @@ def _load_cache() -> Optional[dict[str, Any]]:
         ), CACHE_FILE_NAME,
     )
     if os.path.isfile(cache_file_path):
-        print('Found cache')
+        if VERBOSE:
+            print('Found cache')
         with open(cache_file_path, 'r') as f:
             state = json.load(f)
         return state
 
-    print('No cache file found')
+    if VERBOSE:
+        print('No cache file found')
     return None
 
 
@@ -106,11 +117,13 @@ def _save_cache(state: Any) -> None:
 
     # If the cache dir does not exist create it
     if not os.path.isdir(os.path.dirname(cache_file_path)):
-        print('Making the cache dir')
+        if VERBOSE:
+            print('Making the cache dir')
         os.makedirs(os.path.dirname(cache_file_path))
 
     # Write the state
-    print('Saving cache')
+    if VERBOSE:
+        print('Saving cache')
     with open(cache_file_path, 'w') as f:
         json.dump(state, f)
 
@@ -165,6 +178,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = vars(parser.parse_args(argv))
     keep = gkeepapi.Keep()
 
+    if args['verbose']:
+        global VERBOSE
+        VERBOSE = True
+
     if args['username'] is not None:
         token = keyring.get_password(PASSWORD_TOKEN, args['username'])
         if token is None:
@@ -174,7 +191,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             return 1
 
-        print('Logging you in...')
+        print('Logging in...')
         try:
             keep.resume(args['username'], token)
         except gkeepapi.exception.LoginException:
@@ -185,7 +202,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
     else:
         username, password = _get_login()
-        print('Logging you in')
+        print('Logging in...')
         try:
             keep.login(username, password)
         except gkeepapi.exception.LoginException:
@@ -196,7 +213,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             token = keep.getMasterToken()
             keyring.set_password(PASSWORD_TOKEN, username, token)
 
-    print('Logged in successfully!')
+    if VERBOSE:
+        print('Logged in successfully!')
 
     # XXX: Global const
     if args['heading_level'] != 3:
@@ -230,7 +248,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             markdown += _text_note_to_markdown(note)
 
         if not args['no_archive']:
-            print('Archiving note')
+            if VERBOSE:
+                print(f'Archiving note: {note.title}')
             note.archived = True
 
     keep.sync()
