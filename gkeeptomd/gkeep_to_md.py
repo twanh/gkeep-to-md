@@ -29,7 +29,11 @@ VERBOSE = False
 def _create_argument_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('label', help='the label to search/save')
+    parser.add_argument(
+        'label',
+        help='the label to search/save (if "*" then all notes will be saved)',
+    )
+
     parser.add_argument(
         'outfile',
         help='the (markdown) file to write the result to',
@@ -227,13 +231,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     print(f"Searching for label: {args['label']}")
 
-    extra_options = {}
-    if not args['search_archive']:
-        extra_options['archived'] = False
+    if args['label'] == '*':
+        gknotes = keep.all()
+        # Make sure that the user wants to archive all notes
+        if not args['no_archive']:
+            sure = input(
+                'Are you sure you want to archive all your notes? [y/N]',
+            )
+            if not sure.lower().startswith('y'):
+                args['no_archive'] = True
+    else:
+        extra_options = {}
 
-    gknotes = keep.find(
-        labels=[keep.findLabel(args['label'])], **extra_options,
-    )
+        if not args['search_archive']:
+            extra_options['archived'] = False
+
+        gknotes = keep.find(
+            labels=[keep.findLabel(args['label'])], **extra_options,
+        )
 
     markdown = ''
 
