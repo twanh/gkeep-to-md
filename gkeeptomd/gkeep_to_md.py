@@ -156,7 +156,7 @@ def _list_note_to_markdown(note: gkeepapi._node.List) -> str:
             s_new_line = f'  {"- [x] " if s_checked else "- [ ] "} {s_text}\n'
             body += s_new_line
 
-    return heading + body + '\n'
+    return '\n' + heading + body + '\n'
 
 
 def _create_md_link_from_re(match: re.Match) -> str:
@@ -171,7 +171,7 @@ def _text_note_to_markdown(note: gkeepapi._node.Node) -> str:
     body: str = note.text
     body = re.sub(LINK_RE, _create_md_link_from_re, body)
 
-    return heading + body + '\n'
+    return '\n' + heading + body + '\n'
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
