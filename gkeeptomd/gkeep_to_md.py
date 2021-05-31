@@ -28,7 +28,10 @@ VERBOSE = False
 
 def _create_argument_parser() -> argparse.ArgumentParser:
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog='gkeeptomd',
+        description='Get notes from google keep and save them to a markdown file',  # noqa: E501
+    )
     parser.add_argument(
         'label',
         help='the label to search/save (if "*" then all notes will be saved)',
