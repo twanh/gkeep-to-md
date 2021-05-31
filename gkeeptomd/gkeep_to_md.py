@@ -2,6 +2,7 @@ import argparse
 import getpass
 import json
 import os
+import re
 import sys
 from typing import Any
 from typing import Optional
@@ -18,27 +19,48 @@ from gkeeptomd import app_name
 PASSWORD_TOKEN = 'gkeep-to-md-gkeep-password'
 CACHE_FILE_NAME = 'gkeepnotes.json'
 
+LINK_RE = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'  # noqa: E501
+
+DEFAULT_HEADING_LEVEL = 3
+
 
 def _create_argument_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser()
     parser.add_argument('label', help='the label to search/save')
     parser.add_argument(
-        'outfile', help='the (markdown) file to write the result to',
+        'outfile',
+        help='the (markdown) file to write the result to',
     )
+
     parser.add_argument(
-        '--username', help='the username to use for login (only availble when\
+        '--username',
+        help='the username to use for login (only availble when\
         your password is saved already)',
     )
     parser.add_argument(
-        '--save-login', action='store_true',
+        '--save-login',
+        action='store_true',
         help='login info will be saved, next time provide --username to login',
     )
 
-    # TODO: implement
     parser.add_argument(
-        '--no-archive', action='store_true',
-        help='do notarchive notes that have been added to the markdown file',
+        '--search-archive',
+        action='store_true',
+        help='include archived notes in the search',
+    )
+
+    parser.add_argument(
+        '--no-archive',
+        action='store_true',
+        help='do not archive notes that have been added to the markdown file',
+    )
+
+    parser.add_argument(
+        '--heading-level',
+        default=3,
+        type=int,
+        help='the heading level to use for the markdown headings (default: 3)',
     )
 
     return parser
@@ -93,6 +115,47 @@ def _save_cache(state: Any) -> None:
         json.dump(state, f)
 
 
+def _list_note_to_markdown(note: gkeepapi._node.List) -> str:
+    '''Turns a google keep list to a markdown list'''
+
+    if not note.title:  # type: ignore
+        heading = f'{"#" * DEFAULT_HEADING_LEVEL} <empty title>'
+    else:
+        # type: ignore
+        heading = f'{"#" * DEFAULT_HEADING_LEVEL} {note.title}\n\n'
+
+    body = ''
+
+    for list_item in note.items:
+        text = list_item.text
+        checked = list_item.checked
+        new_line = f'{"- [x] " if checked else "- [ ] "} {text}\n'
+        body += new_line
+
+        for sub_item in list_item.subitems:
+            s_text = sub_item.text
+            s_checked = sub_item.checked
+            s_new_line = f'  {"- [x] " if s_checked else "- [ ] "} {s_text}\n'
+            body += s_new_line
+
+    return heading + body + '\n'
+
+
+def _create_md_link_from_re(match: re.Match) -> str:
+    return f'[{match.group()}]({match.group()})'
+
+
+def _text_note_to_markdown(note: gkeepapi._node.Node) -> str:
+
+    # type: ignore
+    heading = f'{"#" * DEFAULT_HEADING_LEVEL} {note.title or "<empty>"}\n\n'
+
+    body: str = note.text
+    body = re.sub(LINK_RE, _create_md_link_from_re, body)
+
+    return heading + body + '\n'
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if argv is None:
@@ -135,20 +198,45 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     print('Logged in successfully!')
 
+    # XXX: Global const
+    if args['heading_level'] != 3:
+        global DEFAULT_HEADING_LEVEL
+        DEFAULT_HEADING_LEVEL = args['heading_level']
+
     cached_state = _load_cache()
     if cached_state is not None:
         keep.restore(cached_state)
 
+    keep.sync()
+
     print(f"Searching for label: {args['label']}")
-    gknotes = keep.find(labels=[keep.findLabel(args['label'])])
+
+    extra_options = {}
+    if not args['search_archive']:
+        extra_options['archived'] = False
+
+    gknotes = keep.find(
+        labels=[keep.findLabel(args['label'])], **extra_options,
+    )
+
+    markdown = ''
 
     for note in gknotes:
+
         if isinstance(note, gkeepapi._node.List):
             # If it's a list make a todo list in md
-            raise NotImplementedError
+            markdown += _list_note_to_markdown(note)
         else:
-            # write to the markdown file
-            raise NotImplementedError
+            markdown += _text_note_to_markdown(note)
+
+        if not args['no_archive']:
+            print('Archiving note')
+            note.archived = True
+
+    keep.sync()
+
+    with open(args['outfile'], 'a') as f:
+        f.write(markdown)
 
     _save_cache(keep.dump())
 
